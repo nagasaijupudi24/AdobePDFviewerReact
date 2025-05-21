@@ -1,52 +1,28 @@
+/* eslint-disable react/self-closing-comp */
 import React, { useEffect } from 'react';
 
-export const AdobePdfViewer = ({ clientId, defaultViewMode, base64, fileName }) => {
-    console.log(base64)
+export const AdobePdfViewer = ({ clientId, fileUrl, defaultViewMode }) => {
   useEffect(() => {
-    if (!base64) return; // Don't do anything if no base64 passed
-
     const loadAdobeScript = () => {
       return new Promise((resolve, reject) => {
-        if (window.AdobeDC) {
-          resolve();
-        } else {
-          const script = document.createElement('script');
-          script.src = 'https://documentservices.adobe.com/view-sdk/viewer.js';
-          script.defer = true;
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error('Failed to load Adobe PDF Embed API script'));
-          document.body.appendChild(script);
-        }
+        const script = document.createElement('script');
+        script.src = 'https://documentservices.adobe.com/view-sdk/viewer.js';
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Adobe PDF Embed API script'));
+        document.body.appendChild(script);
       });
     };
 
-    const base64ToArrayBuffer = (base64) => {
-      const binaryString = atob(base64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return bytes.buffer;
-    };
-
-    const displayPDF = (base64Content, name) => {
-      const arrayBuffer = base64ToArrayBuffer(base64Content);
-
-      if (window.AdobeDC && window.AdobeDC.View) {
-        const adobeDCView = new window.AdobeDC.View({
+    const displayPDF = () => {
+      const adobeDC = window.AdobeDC;
+      if (adobeDC && adobeDC.View) {
+        new adobeDC.View({
           clientId,
           divId: 'adobe-pdf-viewer'
-        });
-
-        adobeDCView.previewFile({
-          content: {
-            promise: Promise.resolve(arrayBuffer),
-            type: 'application/pdf'
-          },
-          metaData: {
-            fileName: name || 'document.pdf'
-          }
+        }).previewFile({
+          content: { location: { url: fileUrl } },
+          metaData: { fileName: 'document.pdf' }
         }, {
           defaultViewMode,
           showAnnotationTools: false,
@@ -56,23 +32,43 @@ export const AdobePdfViewer = ({ clientId, defaultViewMode, base64, fileName }) 
           showNavigationControls: false,
           showPageControls: false
         });
+
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'childList') {
+              document.querySelector('.adobe-logo-selector');
+              // Customize DOM if needed
+            }
+          });
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        setTimeout(() => observer.disconnect(), 5000);
       } else {
-        document.addEventListener('adobe_dc_view_sdk.ready', () => displayPDF(base64Content, name));
+        document.addEventListener('adobe_dc_view_sdk.ready', displayPDF);
       }
     };
 
     loadAdobeScript()
-      .then(() => displayPDF(base64, fileName))
+      .then(() => {
+        displayPDF();
+      })
       .catch(err => console.error(err));
 
-  }, [base64, clientId, defaultViewMode, fileName]);
+    return () => {
+      const script = document.querySelector('script[src="https://documentservices.adobe.com/view-sdk/viewer.js"]');
+      if (script) {
+        document.body.removeChild(script);
+      }
+    };
+  }, [clientId, fileUrl, defaultViewMode]);
 
   return (
     <div
       id="adobe-pdf-viewer"
       style={{
-        height: '600px',
-        marginTop: '20px',
+        height: "600px",
         position: 'relative',
         boxShadow: '2px 2px 6px 2px #dadada'
       }}
@@ -80,4 +76,5 @@ export const AdobePdfViewer = ({ clientId, defaultViewMode, base64, fileName }) 
   );
 };
 
-export default AdobePdfViewer;
+
+
